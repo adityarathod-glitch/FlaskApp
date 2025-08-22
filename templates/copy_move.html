@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ action }} File - Pirate File Manager</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@400;500;600&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #fdf6e3, #fcebc2, #fdf6e3);
+      background-size: 400% 400%;
+      animation: parchmentMove 12s ease infinite;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    @keyframes parchmentMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .container {
+      background: rgba(255,255,255,0.95);
+      border-radius: 16px;
+      border: 3px solid #d1b463;
+      padding: 40px;
+      width: 100%;
+      max-width: 650px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+      animation: fadeIn 0.8s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      font-family: 'Bree Serif', serif;
+      font-size: 28px;
+      color: #2c2c2c;
+      text-shadow: 1px 1px #f0d78c;
+      margin-bottom: 8px;
+    }
+    .header p {
+      font-size: 15px;
+      color: #666;
+    }
+
+    .current-path {
+      background: linear-gradient(135deg, #fff8e1, #fff3c4);
+      border: 2px solid #f4b400;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 25px;
+      position: relative;
+      overflow: hidden;
+    }
+    .current-path::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(to bottom, #f4b400, #ff9800);
+    }
+    .current-path strong { 
+      color: #222; 
+      font-size: 14px;
+    }
+    .current-path code {
+      background: rgba(255, 255, 255, 0.8);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      color: #d32f2f;
+      font-weight: 600;
+      border: 1px solid #e0e0e0;
+      margin-left: 8px;
+      display: inline-block;
+      word-break: break-all;
+    }
+
+    .form-group { 
+      margin-bottom: 20px; 
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      color: #333;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      font-size: 14px;
+      transition: all 0.3s;
+      font-family: 'Poppins', sans-serif;
+    }
+    .form-group input:focus {
+      border-color: #4a90e2;
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(74, 144, 226, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .path-suggestions {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+    .path-suggestions strong {
+      color: #333;
+    }
+    .path-suggestions .example {
+      font-family: 'Courier New', monospace;
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #d32f2f;
+      margin: 0 2px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 30px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+      justify-content: center;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f7d98c, #d1a740);
+      color: #3b2e10;
+      box-shadow: 0 4px 12px rgba(209, 167, 64, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(209, 167, 64, 0.4);
+    }
+    .btn-secondary {
+      background: linear-gradient(135deg, #6c757d, #495057);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    .btn-secondary:hover {
+      background: linear-gradient(135deg, #5a6268, #343a40);
+      transform: translateY(-2px);
+    }
+
+    .loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .container {
+        padding: 25px;
+        margin: 10px;
+      }
+      .header h1 {
+        font-size: 24px;
+      }
+      .actions {
+        flex-direction: column;
+        align-items: center;
+      }
+      .btn {
+        width: 100%;
+        max-width: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚓️ {{ action }} File</h1>
+      <p>Specify the destination path for your file 🗂️</p>
+    </div>
+
+    <div class="current-path">
+      <strong>📍 Current File:</strong>
+      <code>{{ file_path }}</code>
+    </div>
+
+    <form method="post" id="actionForm">
+      <div class="form-group">
+        <label for="new_path">🎯 {{ action }} to:</label>
+        <input type="text" 
+               id="new_path" 
+               name="new_path" 
+               value="{{ default_path }}" 
+               required 
+               placeholder="folder/subfolder/filename.ext">
+        
+        <div class="path-suggestions">
+          <strong>💡 Path Examples:</strong><br>
+          • Same folder: <span class="example">new_filename.ext</span><br>
+          • Different folder: <span class="example">documents/new_file.ext</span><br>
+          • Nested folder: <span class="example">projects/2024/file.ext</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          {% if action == 'Copy' %}📋 Copy File{% else %}➡️ Move File{% endif %}
+        </button>
+        <a href="{{ url_for('index', bucket=bucket, folder=folder) }}" class="btn btn-secondary">
+          ❌ Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const pathInput = document.getElementById('new_path');
+      const form = document.getElementById('actionForm');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      // Focus and select the input
+      pathInput.focus();
+      pathInput.select();
+      
+      // Handle form submission
+      form.addEventListener('submit', function(e) {
+        const newPath = pathInput.value.trim();
+        
+        if (!newPath) {
+          e.preventDefault();
+          alert('Please enter a destination path!');
+          pathInput.focus();
+          return;
+        }
+        
+        // Add loading state
+        submitBtn.classList.add('loading');
+        submitBtn.innerHTML = '⏳ {{ action }}ing...';
+        submitBtn.disabled = true;
+        
+        // Re-enable after timeout as fallback
+        setTimeout(function() {
+          submitBtn.classList.remove('loading');
+          submitBtn.innerHTML = '{% if action == "Copy" %}📋 Copy File{% else %}➡️ Move File{% endif %}';
+          submitBtn.disabled = false;
+        }, 5000);
+      });
+      
+      // Handle Enter key for quick submission
+      pathInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          form.submit();
+        }
+      });
+      
+      // Path validation and suggestions
+      pathInput.addEventListener('input', function() {
+        const value = this.value;
+        const isValid = value.trim().length > 0;
+        
+        if (isValid) {
+          this.style.borderColor = '#4caf50';
+        } else {
+          this.style.borderColor = '#f44336';
+        }
+      });
+    });
+  </script>
+</body>
+</html>
