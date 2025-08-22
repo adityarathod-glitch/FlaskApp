@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+
+# Virtual environments
+venv/
+ENV/
+.venv/
+env/
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python packaging
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Pytest / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Environment files (secrets, keys, etc.)
+.env
+*.env
+
+# Render / Deployment
+instance/
