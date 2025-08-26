@@ -13,7 +13,6 @@ SB_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 
 sb: Client = create_client(SB_URL, SB_KEY)
-
 sb_admin: Client = create_client(SB_URL, SB_SERVICE_KEY)
 
 
@@ -50,11 +49,35 @@ def get_buckets():
         elif isinstance(res, dict):
             return res.get("data", [])
         else:
-        
             return list(res) if res else []
     except Exception as e:
         print(f"Error fetching buckets: {e}")
         return []
+
+
+def is_public_bucket(bucket_name):
+    """Check if a bucket is public by examining its configuration"""
+    try:
+        buckets = get_buckets()
+        for bucket in buckets:
+            name = bucket.name if hasattr(bucket, 'name') else bucket.get('name') if isinstance(bucket, dict) else str(bucket)
+            if name == bucket_name:
+                
+                if hasattr(bucket, 'public'):
+                    return bucket.public
+                elif isinstance(bucket, dict):
+                    return bucket.get('public', False)
+        return False
+    except Exception as e:
+        print(f"Error checking bucket publicity: {e}")
+        return False
+
+
+def get_client_for_bucket(bucket_name):
+    """Get appropriate client based on bucket type"""
+    if is_public_bucket(bucket_name):
+        return sb_admin  
+    return sb  
 
 
 @app.route("/")
@@ -67,37 +90,46 @@ def index():
     buckets = []
     for bucket_obj in raw_buckets:
         if hasattr(bucket_obj, 'name'):
-            buckets.append({"name": bucket_obj.name})
+            buckets.append({
+                "name": bucket_obj.name,
+                "public": getattr(bucket_obj, 'public', False)
+            })
         elif isinstance(bucket_obj, dict):
-            buckets.append({"name": bucket_obj.get("name", "Unknown")})
+            buckets.append({
+                "name": bucket_obj.get("name", "Unknown"),
+                "public": bucket_obj.get("public", False)
+            })
         else:
-            buckets.append({"name": str(bucket_obj)})
+            buckets.append({
+                "name": str(bucket_obj),
+                "public": False
+            })
 
     contents = []
     try:
+        
+        client = get_client_for_bucket(bucket)
+        
         options = {"limit": 100, "offset": 0}
         if folder:
             options["prefix"] = folder + "/"
 
-        res = sb.storage.from_(bucket).list(folder, options)
+        res = client.storage.from_(bucket).list(folder, options)
         data = res if isinstance(res, list) else res.get("data", [])
 
         for obj in data:
             if not isinstance(obj, dict) or not obj.get("name"):
                 continue
             
-            
             if obj["name"] == folder or obj["name"].endswith(".keep"):
                 continue
 
-            
             if folder:
                 full_path = f"{folder}/{obj['name']}"
             else:
                 full_path = obj["name"]
 
             if obj.get("metadata") is None:
-                
                 contents.append({
                     "name": obj["name"],
                     "type": "folder",
@@ -105,7 +137,6 @@ def index():
                     "size": 0
                 })
             else:
-                
                 contents.append({
                     "name": obj["name"],
                     "type": "file",
@@ -116,15 +147,16 @@ def index():
     except Exception as err:
         flash(f"Error listing contents: {err}")
 
-    
     breadcrumbs = get_breadcrumbs(folder)
+    current_bucket_public = is_public_bucket(bucket)
 
     return render_template("index.html",
                            contents=contents,
                            bucket_name=bucket,
                            current_folder=folder,
                            breadcrumbs=breadcrumbs,
-                           buckets=buckets)
+                           buckets=buckets,
+                           current_bucket_public=current_bucket_public)
 
 
 @app.route("/upload/<bucket>", methods=["POST"])
@@ -137,12 +169,15 @@ def upload_file(bucket):
         return redirect(url_for("index", bucket=bucket, folder=folder))
 
     try:
+        
+        client = get_client_for_bucket(bucket)
+        
         if folder:
             path = f"{folder}/{file.filename}"
         else:
             path = file.filename
             
-        res = sb.storage.from_(bucket).upload(path, file.read())
+        res = client.storage.from_(bucket).upload(path, file.read())
 
         if isinstance(res, dict) and res.get("error"):
             flash(f"Upload failed: {res['error']['message']}")
@@ -164,14 +199,16 @@ def create_folder(bucket):
         return redirect(url_for("index", bucket=bucket, folder=parent))
 
     try:
+        
+        client = get_client_for_bucket(bucket)
+        
         if parent:
             folder_path = f"{parent}/{name}"
         else:
             folder_path = name
             
-        
         keep_file_path = f"{folder_path}/.keep"
-        res = sb.storage.from_(bucket).upload(keep_file_path, b"")
+        res = client.storage.from_(bucket).upload(keep_file_path, b"")
 
         if isinstance(res, dict) and res.get("error"):
             flash(f"Error creating folder: {res['error']['message']}")
@@ -193,7 +230,10 @@ def delete_file(bucket):
         return redirect(url_for("index", bucket=bucket, folder=folder))
 
     try:
-        res = sb.storage.from_(bucket).remove([path])
+        
+        client = get_client_for_bucket(bucket)
+        
+        res = client.storage.from_(bucket).remove([path])
         if isinstance(res, dict) and res.get("error"):
             flash(f"Delete failed: {res['error']['message']}")
         else:
@@ -215,15 +255,13 @@ def delete_folder(bucket):
 
     try:
         
-        res = sb.storage.from_(bucket).list(folder_path, {"limit": 1000})
+        client = get_client_for_bucket(bucket)
+        
+        res = client.storage.from_(bucket).list(folder_path, {"limit": 1000})
         items = res if isinstance(res, list) else res.get("data", [])
         
-        
         to_delete = []
-        
-        
         to_delete.append(f"{folder_path}/.keep")
-        
         
         for item in items:
             if isinstance(item, dict) and item.get("name"):
@@ -231,8 +269,7 @@ def delete_folder(bucket):
                 to_delete.append(file_path)
 
         if to_delete:
-    
-            result = sb.storage.from_(bucket).remove(to_delete)
+            result = client.storage.from_(bucket).remove(to_delete)
             if isinstance(result, dict) and result.get("error"):
                 flash(f"Folder delete failed: {result['error']['message']}")
             else:
@@ -275,11 +312,14 @@ def copy_file(bucket):
         return redirect(url_for("index", bucket=bucket, folder=folder))
 
     try:
-        content = sb.storage.from_(bucket).download(path)
+        
+        client = get_client_for_bucket(bucket)
+        
+        content = client.storage.from_(bucket).download(path)
         if isinstance(content, dict) and content.get("error"):
             flash(f"Download failed: {content['error']['message']}")
         else:
-            res = sb.storage.from_(bucket).upload(new_path, content)
+            res = client.storage.from_(bucket).upload(new_path, content)
             if isinstance(res, dict) and res.get("error"):
                 flash(f"Copy failed: {res['error']['message']}")
             else:
@@ -318,17 +358,20 @@ def move_file(bucket):
         return redirect(url_for("index", bucket=bucket, folder=folder))
 
     try:
-        content = sb.storage.from_(bucket).download(path)
+    
+        client = get_client_for_bucket(bucket)
+        
+        content = client.storage.from_(bucket).download(path)
         if isinstance(content, dict) and content.get("error"):
             flash(f"Download failed: {content['error']['message']}")
             return redirect(url_for("index", bucket=bucket, folder=folder))
 
-        uploaded = sb.storage.from_(bucket).upload(new_path, content)
+        uploaded = client.storage.from_(bucket).upload(new_path, content)
         if isinstance(uploaded, dict) and uploaded.get("error"):
             flash(f"Move failed: {uploaded['error']['message']}")
             return redirect(url_for("index", bucket=bucket, folder=folder))
 
-        deleted = sb.storage.from_(bucket).remove([path])
+        deleted = client.storage.from_(bucket).remove([path])
         if isinstance(deleted, dict) and deleted.get("error"):
             flash(f"File moved but original not deleted: {deleted['error']['message']}")
         else:
@@ -347,7 +390,10 @@ def download_file(bucket):
         return redirect(url_for("index", bucket=bucket))
 
     try:
-        res = sb.storage.from_(bucket).create_signed_url(path, 3600)
+        
+        client = get_client_for_bucket(bucket)
+        
+        res = client.storage.from_(bucket).create_signed_url(path, 3600)
         if isinstance(res, dict) and res.get("error"):
             flash(f"Download link error: {res['error']['message']}")
         else:
@@ -365,6 +411,7 @@ def download_file(bucket):
 @app.route("/create_bucket", methods=["POST"])
 def create_bucket():   
     name = request.form.get("bucket_name", "").strip()
+    is_public = request.form.get("is_public") == "on"
     current_bucket = request.form.get("current_bucket", "my-bucket")
     
     if not name:
@@ -373,16 +420,45 @@ def create_bucket():
 
     try:
         
-        res = sb_admin.storage.create_bucket(name)
+        bucket_options = {
+            "public": is_public
+        }
+        
+        res = sb_admin.storage.create_bucket(name, options=bucket_options)
         if isinstance(res, dict) and res.get("error"):
             flash(f"Bucket creation failed: {res['error']['message']}")
         else:
-            flash(f"Bucket '{name}' created successfully!")
+            bucket_type = "public" if is_public else "private"
+            flash(f"Bucket '{name}' created successfully as {bucket_type}!")
             return redirect(url_for("index", bucket=name))
     except Exception as err:
         flash(f"Error creating bucket: {err}")
     
     return redirect(url_for("index", bucket=current_bucket))
+
+
+@app.route("/toggle_bucket_publicity/<bucket>")
+def toggle_bucket_publicity(bucket):
+    """Toggle bucket between public and private"""
+    if not bucket:
+        flash("Bucket name required.")
+        return redirect(url_for("index"))
+
+    try:
+        current_public = is_public_bucket(bucket)
+        new_public = not current_public
+        
+        
+        res = sb_admin.storage.update_bucket(bucket, {"public": new_public})
+        if isinstance(res, dict) and res.get("error"):
+            flash(f"Failed to update bucket: {res['error']['message']}")
+        else:
+            status = "public" if new_public else "private"
+            flash(f"Bucket '{bucket}' is now {status}!")
+    except Exception as err:
+        flash(f"Error updating bucket: {err}")
+    
+    return redirect(url_for("index", bucket=bucket))
 
 
 @app.route("/delete_bucket/<bucket>")
@@ -392,7 +468,6 @@ def delete_bucket(bucket):
         return redirect(url_for("index"))
 
     try:
-        
         res = sb_admin.storage.delete_bucket(bucket)
         if isinstance(res, dict) and res.get("error"):
             flash(f"Bucket deletion failed: {res['error']['message']}")
@@ -402,7 +477,6 @@ def delete_bucket(bucket):
             buckets = get_buckets()
             default_bucket = "my-bucket"
             if buckets and len(buckets) > 0:
-                
                 first_bucket = buckets[0]
                 if hasattr(first_bucket, 'name'):
                     default_bucket = first_bucket.name
@@ -423,24 +497,26 @@ def list_buckets():
         buckets = get_buckets()
         bucket_info = []
         for bucket in buckets:
-            
             if hasattr(bucket, 'name'):
                 bucket_info.append({
                     "name": bucket.name,
                     "id": getattr(bucket, 'id', 'N/A'),
-                    "created_at": getattr(bucket, 'created_at', 'N/A')
+                    "created_at": getattr(bucket, 'created_at', 'N/A'),
+                    "public": getattr(bucket, 'public', False)
                 })
             elif isinstance(bucket, dict):
                 bucket_info.append({
                     "name": bucket.get("name", "Unknown"),
                     "id": bucket.get("id", "N/A"),
-                    "created_at": bucket.get("created_at", "N/A")
+                    "created_at": bucket.get("created_at", "N/A"),
+                    "public": bucket.get("public", False)
                 })
             else:
                 bucket_info.append({
                     "name": str(bucket),
                     "id": "N/A",
-                    "created_at": "N/A"
+                    "created_at": "N/A",
+                    "public": False
                 })
         flash(f"Found {len(bucket_info)} buckets. Check console for details.")
         print("Available buckets:", bucket_info)
